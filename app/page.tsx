@@ -8,20 +8,6 @@ import {
   type PanInfo,
 } from "framer-motion"
 
-// ---------- Zalgo ----------
-function zalgo(text: string): string {
-  const up = ["̍","̎","̄","̅","̿","̑","̆","̐","͒","͗","͑","̇","̈","̊","͂","̓","̈́","͊","͋","͌","̃"]
-  const down = ["̖","̗","̘","̙","̜","̝","̞","̟","̠","̤","̥","̦","̩","̪","̫","̬","̭","̮","̯","̰","̱"]
-  const mid = ["̕","̛","̀","́","͘","̡","̢","̧","̨","̴","̵","̶","͏","͜"]
-  return text.split("").map((c) => {
-    let r = c
-    for (let i = 0; i < Math.floor(Math.random() * 8); i++) r += up[Math.floor(Math.random() * up.length)]
-    for (let i = 0; i < Math.floor(Math.random() * 3); i++) r += mid[Math.floor(Math.random() * mid.length)]
-    for (let i = 0; i < Math.floor(Math.random() * 8); i++) r += down[Math.floor(Math.random() * down.length)]
-    return r
-  }).join("")
-}
-
 // ---------- Types ----------
 type Vec = { x: number; y: number }
 
@@ -51,7 +37,7 @@ function CursorAverseCharlie() {
       x: Math.random() * (w - pad * 2) + pad,
       y: Math.random() * (h - pad * 2) + pad,
     })
-    const phrases = ["GET AWAY!!", "NO TOUCH!!", "NOPE NOPE", "SECURITY!!", "I JUST GOT HERE", "HEY MAN COME ON"]
+    const phrases = ["GET AWAY MAN!!", "fug you pimp", "NOPE NOPE", "PIM HELP!!", "what the sig", "HEY MAN COME ON"]
     setPhrase(phrases[Math.floor(Math.random() * phrases.length)])
     setPanicLevel((p) => Math.min(p + 1, 12))
     setTimeout(() => setPhrase(null), 1100)
@@ -277,7 +263,7 @@ function SadZone({ innerRef }: { innerRef: React.RefObject<HTMLDivElement | null
               <div className="h-3 w-3 rounded-full border-2 border-foreground bg-secondary" />
               <div className="h-3 w-3 rounded-full border-2 border-foreground bg-accent" />
             </div>
-            <div className="font-display text-sm tracking-[0.3em] text-foreground">CHANNEL 4</div>
+            <div className="font-display text-sm tracking-[0.3em] text-foreground">Help this guy ^</div>
             <div className="h-3 w-10 rounded-full border-2 border-foreground bg-foreground" />
           </div>
         </div>
@@ -342,32 +328,251 @@ function HappinessExplosion({ onComplete }: { onComplete: () => void }) {
           className="font-display text-6xl leading-none tracking-wider md:text-8xl lg:text-[10rem]"
           style={{ WebkitTextStroke: "4px #0a0a0a", color: "#fff8e8", textShadow: "8px 8px 0 #0a0a0a" }}
         >
-          I LOVE
+          OH YEAH
           <br />
-          HELPING
+          PIM
           <br />
-          KIDS!!
+          OH YEAH
         </h1>
       </motion.div>
     </motion.div>
   )
 }
 
-// ---------- Glep ----------
-const GLEP_GOAL = 20000
+// ---------- Cheese Clicker (main goal: 20k) ----------
+const CHEESE_GOAL = 20000
 
-function Glep({
-  onChaos,
-  physics,
-  clickCount,
-  onClick,
-}: {
-  onChaos: (t: { rotate: number; skewX: number; skewY: number }) => void
-  physics: PhysicsRefs
-  clickCount: number
-  onClick: () => void
-}) {
-  const [zalgoText, setZalgoText] = useState<string | null>(null)
+function CheeseClicker({ count, onClick }: { count: number; onClick: () => void }) {
+  const pct = Math.min((count / CHEESE_GOAL) * 100, 100)
+  const [pop, setPop] = useState(false)
+
+  const handleClick = () => {
+    onClick()
+    setPop(true)
+    setTimeout(() => setPop(false), 110)
+  }
+
+  return (
+    <div className="absolute bottom-8 left-1/2 z-20 -translate-x-1/2 flex flex-col items-center gap-2">
+      <div className="relative">
+        <motion.button
+          type="button"
+          className="relative cursor-pointer select-none focus:outline-none"
+          animate={pop ? { scale: 0.82, rotate: -8 } : { scale: 1, rotate: 0, y: [0, -5, 0] }}
+          transition={pop ? { duration: 0.08 } : { y: { duration: 2.4, repeat: Infinity, ease: "easeInOut" } }}
+          onClick={handleClick}
+          whileHover={pop ? {} : { scale: 1.12 }}
+        >
+          <div className="rounded-2xl border-[4px] border-foreground bg-[#ffe14d] px-5 py-3 shadow-[5px_5px_0_0_var(--foreground)]">
+            <span className="text-5xl leading-none select-none">🧀</span>
+          </div>
+        </motion.button>
+
+        <AnimatePresence>
+          {pop && (
+            <motion.div
+              key={count}
+              initial={{ opacity: 1, y: -4, scale: 1 }}
+              animate={{ opacity: 0, y: -40, scale: 0.7 }}
+              exit={{}}
+              transition={{ duration: 0.5 }}
+              className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 font-display text-sm tracking-wider text-foreground"
+            >
+              +1 🧀
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="w-44 rounded-lg border-[3px] border-foreground bg-card px-3 py-2 shadow-[3px_3px_0_0_var(--foreground)]">
+        <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] text-foreground">
+          <span>{count.toLocaleString()} 🧀</span>
+          <span className="opacity-50">/ 20K</span>
+        </div>
+        <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-foreground bg-background">
+          <motion.div
+            className="h-full rounded-full bg-[#ffe14d]"
+            animate={{ width: `${pct}%` }}
+            transition={{ type: "spring", stiffness: 80, damping: 14 }}
+          />
+        </div>
+        {pct >= 100 && (
+          <div className="mt-1 text-center font-display text-[10px] tracking-widest text-foreground">
+            COMPLETE!!
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Glep's iPad feed content ----------
+const IPAD_FEED = [
+  {
+    app: "NOTIFICATIONS",
+    color: "#5ec8ff",
+    icon: "🔔",
+    title: "THE VOID liked your post",
+    body: '"good morning" — 3 seconds ago',
+  },
+  {
+    app: "MESSAGES — ALAN",
+    color: "#7cff3e",
+    icon: "💬",
+    title: "iMessage",
+    body: "Alan: did u fill out the tps reports\nGlep: what\nAlan: ok\nAlan: also did u fill out the tps reports\nAlan: glep",
+  },
+  {
+    app: "GLEP TV",
+    color: "#ff1f8f",
+    icon: "▶",
+    title: "SUBSCRIBE OR ELSE (10 HOURS)",
+    body: "0 views · uploaded 4 years ago · GLEP OFFICIAL",
+  },
+  {
+    app: "EMAIL",
+    color: "#ffe14d",
+    icon: "📧",
+    title: "Re: Your Behavior — HR@company.void",
+    body: "Please stop ascending to a higher plane during work hours. This is your 4th warning this week.",
+  },
+  {
+    app: "REDDIT",
+    color: "#ff1f8f",
+    icon: "👽",
+    title: "AITA for existing? [UPDATE: I am still existing]",
+    body: "r/AmITheAsshole · 2.4M upvotes\nTop comment: \"NTA, your roommate sounds like Alan\"",
+  },
+  {
+    app: "DOORDASH",
+    color: "#7cff3e",
+    icon: "🛵",
+    title: "Your order is on the way!",
+    body: "1x Existential Dread (Large)\n1x Side of Cheese\nETA: ∞ minutes",
+  },
+  {
+    app: "NOTES",
+    color: "#5ec8ff",
+    icon: "📝",
+    title: "things 2 do today",
+    body: "• subscribe\n• SUBSCRIBE\n• remind everyone to subscribe\n• ascend briefly\n• subscribe again",
+  },
+  {
+    app: "GLEP TV",
+    color: "#ff1f8f",
+    icon: "▶",
+    title: "HOW TO BE MORE LIKE GLEP (GONE WRONG) (EMOTIONAL)",
+    body: "14.2M views · GLEP OFFICIAL · #subscribe #void #ipad",
+  },
+  {
+    app: "SPOTIFY",
+    color: "#7cff3e",
+    icon: "🎵",
+    title: "Now Playing",
+    body: "silence (extended edition) — THE VOID\n∞:∞ ━━━━━●──────── ∞:∞",
+  },
+  {
+    app: "CAMERA ROLL",
+    color: "#ffe14d",
+    icon: "📷",
+    title: "Photo — just now",
+    body: "[image: a perfectly normal room. nothing is wrong here. nothing is wrong. please do not look closer.]",
+  },
+]
+
+// ---------- Glep's iPad modal ----------
+function GlepIpad({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[3px]" />
+
+      <motion.div
+        className="relative z-10"
+        initial={{ scale: 0.78, rotate: -10, y: 24 }}
+        animate={{ scale: 1, rotate: 0, y: 0 }}
+        exit={{ scale: 0.78, rotate: 10, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        {/* Label */}
+        <div className="mb-3 text-center">
+          <span className="rounded-md border-[3px] border-foreground bg-accent px-3 py-1 font-display text-sm tracking-widest text-foreground shadow-[3px_3px_0_0_var(--foreground)]">
+            GLEP&apos;S iPAD
+          </span>
+        </div>
+
+        {/* iPad shell */}
+        <div
+          className="relative rounded-[32px] border-[7px] border-foreground bg-foreground shadow-[12px_12px_0_0_rgba(0,0,0,0.4)]"
+          style={{ width: 320 }}
+        >
+          {/* Camera notch */}
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="h-2 w-10 rounded-full bg-card/20" />
+          </div>
+
+          {/* Screen */}
+          <div className="mx-1 overflow-hidden rounded-[22px] bg-[#0d0d0d]" style={{ height: 500 }}>
+            {/* Status bar */}
+            <div className="flex items-center justify-between bg-[#111] px-4 py-1.5">
+              <span className="font-mono text-[10px] text-white/50">9:41</span>
+              <span className="font-display text-[10px] tracking-[0.2em] text-white/70">GLEP OS 1.0</span>
+              <span className="font-mono text-[10px] text-white/50">🔋 69%</span>
+            </div>
+
+            {/* Scrollable feed */}
+            <div className="h-[calc(500px-32px)] overflow-y-auto px-2.5 py-2 space-y-2">
+              {IPAD_FEED.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.055 }}
+                  className="overflow-hidden rounded-xl"
+                  style={{ backgroundColor: item.color + "16", border: `1px solid ${item.color}30` }}
+                >
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1"
+                    style={{ backgroundColor: item.color + "35" }}
+                  >
+                    <span className="text-xs leading-none">{item.icon}</span>
+                    <span className="font-display text-[9px] tracking-widest text-white/80">{item.app}</span>
+                  </div>
+                  <div className="px-2.5 py-2">
+                    <p className="font-display text-[11px] leading-snug tracking-wide text-white">{item.title}</p>
+                    <p className="mt-1 whitespace-pre-line font-mono text-[9px] leading-relaxed text-white/55">{item.body}</p>
+                  </div>
+                </motion.div>
+              ))}
+
+              <div className="py-3 text-center font-display text-[9px] tracking-widest text-white/20">
+                — YOU HAVE REACHED THE BOTTOM OF THE VOID —
+              </div>
+            </div>
+          </div>
+
+          {/* Home bar */}
+          <div className="flex justify-center py-2">
+            <div className="h-1 w-16 rounded-full bg-card/25" />
+          </div>
+        </div>
+
+        <p className="mt-3 text-center font-mono text-[10px] tracking-widest text-foreground/50">
+          tap anywhere to close
+        </p>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ---------- Glep: tap to see iPad ----------
+function Glep({ physics, onOpen }: { physics: PhysicsRefs; onOpen: () => void }) {
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -404,107 +609,44 @@ function Glep({
     return () => cancelAnimationFrame(raf)
   }, [physics, x, y])
 
-  const trigger = () => {
-    onClick()
-    const intensity = Math.min(1 + clickCount * 0.4, 4)
-    onChaos({
-      rotate: (Math.random() * 24 - 12) * intensity,
-      skewX: (Math.random() * 8 - 4) * intensity,
-      skewY: (Math.random() * 8 - 4) * intensity,
-    })
-    const phrases = [
-      "THE VOID CONSUMES", "GLEP SEES ALL", "ERROR 404 SANITY",
-      "iPAD OF DOOM", "SUBSCRIBE NOW", "BEHOLD",
-      "WHY DID YOU CLICK", "STOP THAT",
-    ]
-    setZalgoText(zalgo(phrases[Math.floor(Math.random() * phrases.length)]))
-    setTimeout(() => setZalgoText(null), 2000)
-  }
-
-  const pct = Math.min((clickCount / GLEP_GOAL) * 100, 100)
-
   return (
-    <>
-      <motion.div
-        ref={wrapRef}
-        className="absolute bottom-12 right-12 z-20 flex flex-col items-center gap-3"
-        style={{ x, y }}
+    <motion.div
+      ref={wrapRef}
+      className="absolute bottom-12 right-12 z-20"
+      style={{ x, y }}
+    >
+      <motion.button
+        type="button"
+        className="cursor-pointer select-none focus:outline-none"
+        whileHover={{ scale: 1.08, rotate: -4 }}
+        whileTap={{ scale: 0.92, rotate: 4 }}
+        onClick={onOpen}
+        animate={{ y: [0, -6, 0] }}
+        transition={{ y: { duration: 2, repeat: Infinity, ease: "easeInOut" } }}
       >
-        <motion.button
-          type="button"
-          className="cursor-pointer select-none focus:outline-none"
-          whileHover={{ scale: 1.08, rotate: -4 }}
-          whileTap={{ scale: 0.92, rotate: 4 }}
-          onClick={trigger}
-          animate={{ y: [0, -6, 0] }}
-          transition={{ y: { duration: 2, repeat: Infinity, ease: "easeInOut" } }}
-        >
-          <div className="relative">
-            <div className="relative h-32 w-32 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
-              <img src="/glep.png" alt="Glep" className="h-full w-full object-cover" draggable={false} />
-            </div>
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-accent px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
-              GLEP
-            </div>
-            <motion.div
-              animate={{ rotate: [-6, 6, -6] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="absolute -right-4 -top-4 rounded-md border-[3px] border-foreground bg-card px-2 py-1 font-display text-xs tracking-wider text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
-            >
-              CLICK ME
-            </motion.div>
+        <div className="relative">
+          <div className="relative h-32 w-32 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
+            <img src="/glep.png" alt="Glep" className="h-full w-full object-cover" draggable={false} />
           </div>
-        </motion.button>
 
-        {/* Progress toward 20k */}
-        <div className="mt-2 w-36 rounded-lg border-[3px] border-foreground bg-card px-3 py-2 shadow-[3px_3px_0_0_var(--foreground)]">
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] text-foreground">
-            <span>{clickCount.toLocaleString()}</span>
-            <span className="opacity-60">/ 20K</span>
+          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-accent px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
+            GLEP
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-foreground bg-background">
-            <motion.div
-              className="h-full rounded-full bg-secondary"
-              animate={{ width: `${pct}%` }}
-              transition={{ type: "spring", stiffness: 60, damping: 14 }}
-            />
-          </div>
-          {clickCount > 0 && (
-            <div className="mt-1 text-center font-mono text-[9px] text-foreground opacity-50">
-              {pct < 100 ? `${pct.toFixed(1)}%` : "COMPLETE!!"}
-            </div>
-          )}
-        </div>
-      </motion.div>
 
-      <AnimatePresence>
-        {zalgoText && (
           <motion.div
-            className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            animate={{ rotate: [-6, 6, -6] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="absolute -right-7 -top-5 rounded-md border-[3px] border-foreground bg-card px-2 py-1 font-display text-xs tracking-wider text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
           >
-            <motion.p
-              className="max-w-[90vw] text-center font-display text-5xl tracking-wider md:text-7xl lg:text-9xl"
-              style={{
-                color: "#fff8e8",
-                WebkitTextStroke: "3px #0a0a0a",
-                textShadow: "6px 6px 0 #0a0a0a, 0 0 30px rgba(255,255,255,0.6)",
-              }}
-              animate={{ x: [0, -12, 12, -12, 12, 0], y: [0, 4, -4, 4, -4, 0] }}
-              transition={{ duration: 0.25, repeat: 8 }}
-            >
-              {zalgoText}
-            </motion.p>
+            📱 TAP
           </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+        </div>
+      </motion.button>
+    </motion.div>
   )
 }
 
-// ---------- Alan: TPS report guy — appears briefly, stays calm ----------
+// ---------- Alan ----------
 function Alan({ pos, active }: { pos: Vec; active: boolean }) {
   return (
     <AnimatePresence>
@@ -597,7 +739,7 @@ function VoidDecorations() {
           key={i}
           viewBox="0 0 24 24"
           className="absolute"
-          style={{ top: s.top, left: s.left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size }}
+          style={{ top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size }}
           animate={{ rotate: [s.rot, s.rot + 360] }}
           transition={{ duration: 8 + i * 2, repeat: Infinity, ease: "linear" }}
         >
@@ -653,11 +795,15 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
           </li>
           <li className="flex gap-3">
             <span className="font-display text-base leading-none text-foreground shrink-0">3.</span>
-            <span>Click <b>Glep</b> 20,000 times. Each click warps reality harder. Reach the goal!</span>
+            <span>Click the 🧀 <b>cheese</b> at the bottom 20,000 times to win!</span>
           </li>
           <li className="flex gap-3">
             <span className="font-display text-base leading-none text-foreground shrink-0">4.</span>
-            <span><b>Alan</b> pops in occasionally with a TPS report. Keep Pim away or HR gets him.</span>
+            <span>Tap <b>Glep</b> (📱 TAP) to check what&apos;s on his iPad.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="font-display text-base leading-none text-foreground shrink-0">5.</span>
+            <span><b>Alan</b> drops by with TPS reports. Keep Pim away!</span>
           </li>
         </ol>
 
@@ -672,11 +818,11 @@ function InstructionsModal({ onClose }: { onClose: () => void }) {
 // ---------- Main ----------
 export default function SmilingFriendsSandbox() {
   const [explode, setExplode] = useState(false)
-  const [transform, setTransform] = useState({ rotate: 0, skewX: 0, skewY: 0 })
   const [showInstructions, setShowInstructions] = useState(false)
+  const [showIpad, setShowIpad] = useState(false)
   const sadZoneRef = useRef<HTMLDivElement>(null)
 
-  const [glepClicks, setGlepClicks] = useState(0)
+  const [cheeseClicks, setCheeseClicks] = useState(0)
 
   const [alanPos, setAlanPos] = useState<Vec>({ x: 0, y: 0 })
   const [alanActive, setAlanActive] = useState(false)
@@ -688,12 +834,12 @@ export default function SmilingFriendsSandbox() {
 
   const physics: PhysicsRefs = { alanPosRef, alanActiveRef }
 
-  // Reaching 20k triggers the celebration
+  // 20k cheese clicks = victory
   useEffect(() => {
-    if (glepClicks === GLEP_GOAL) setExplode(true)
-  }, [glepClicks])
+    if (cheeseClicks === CHEESE_GOAL) setExplode(true)
+  }, [cheeseClicks])
 
-  // Alan spawns every 60s, visible for 3s
+  // Alan: spawns every 60s, visible for 3s
   useEffect(() => {
     const spawn = () => {
       const w = window.innerWidth
@@ -736,62 +882,59 @@ export default function SmilingFriendsSandbox() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
-      <motion.div
-        className="relative h-full w-full"
-        animate={{ rotate: transform.rotate, skewX: transform.skewX, skewY: transform.skewY }}
-        transition={{ type: "spring", stiffness: 90, damping: 9 }}
-      >
-        <VoidDecorations />
+      <VoidDecorations />
 
-        {/* Header */}
-        <header className="absolute left-1/2 top-6 z-30 -translate-x-1/2 select-none text-center">
-          <motion.h1
-            className="font-display text-5xl leading-none tracking-wider text-foreground md:text-7xl"
-            style={{ WebkitTextStroke: "1px #0a0a0a", textShadow: "5px 5px 0 #fff8e8, 7px 7px 0 #0a0a0a" }}
-            animate={{ rotate: [-1.5, 1.5, -1.5] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          >
-            SMILING FRIENDS
-          </motion.h1>
-          <div className="mt-2 inline-block rotate-[-2deg] rounded border-[3px] border-foreground bg-card px-3 py-1 font-mono text-xs uppercase tracking-widest text-foreground shadow-[3px_3px_0_0_var(--foreground)]">
-            chaos sandbox / season ∞ / ep. 404
-          </div>
-        </header>
-
-        {/* ? button — top right */}
-        <motion.button
-          onClick={() => setShowInstructions(true)}
-          className="absolute right-6 top-6 z-30 flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-foreground bg-card font-display text-xl text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+      {/* Header */}
+      <header className="absolute left-1/2 top-6 z-30 -translate-x-1/2 select-none text-center">
+        <motion.h1
+          className="font-display text-5xl leading-none tracking-wider text-foreground md:text-7xl"
+          style={{ WebkitTextStroke: "1px #0a0a0a", textShadow: "5px 5px 0 #fff8e8, 7px 7px 0 #0a0a0a" }}
+          animate={{ rotate: [-1.5, 1.5, -1.5] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          ?
-        </motion.button>
+          SMILING FRIENDS
+        </motion.h1>
+        <div className="mt-2 inline-block rotate-[-2deg] rounded border-[3px] border-foreground bg-card px-3 py-1 font-mono text-xs uppercase tracking-widest text-foreground shadow-[3px_3px_0_0_var(--foreground)]">
+          Smiling Friends game / made by luke
+        </div>
+      </header>
 
-        <SadZone innerRef={sadZoneRef} />
-        <CursorAverseCharlie />
-        <DraggablePim
-          sadZoneRef={sadZoneRef}
-          onExplode={() => setExplode(true)}
-          physics={physics}
-          onEaten={handlePimEaten}
-          eaten={pimEaten}
-        />
-        <Glep
-          onChaos={setTransform}
-          physics={physics}
-          clickCount={glepClicks}
-          onClick={() => setGlepClicks((c) => Math.min(c + 1, GLEP_GOAL))}
-        />
-      </motion.div>
+      {/* ? button — top right */}
+      <motion.button
+        onClick={() => setShowInstructions(true)}
+        className="absolute right-6 top-6 z-30 flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-foreground bg-card font-display text-xl text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
+      >
+        ?
+      </motion.button>
 
-      {/* Alan + cheese bubble outside warped stage so they stay readable */}
+      <SadZone innerRef={sadZoneRef} />
+      <CursorAverseCharlie />
+      <DraggablePim
+        sadZoneRef={sadZoneRef}
+        onExplode={() => setExplode(true)}
+        physics={physics}
+        onEaten={handlePimEaten}
+        eaten={pimEaten}
+      />
+      <CheeseClicker
+        count={cheeseClicks}
+        onClick={() => setCheeseClicks((c) => Math.min(c + 1, CHEESE_GOAL))}
+      />
+      <Glep physics={physics} onOpen={() => setShowIpad(true)} />
+
+      {/* Alan + cheese bubble sit outside the scene */}
       <Alan pos={alanPos} active={alanActive} />
 
       <AnimatePresence>
         {cheesePos && (
           <CheeseBubble pos={cheesePos} onDone={() => setCheesePos(null)} />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showIpad && <GlepIpad onClose={() => setShowIpad(false)} />}
       </AnimatePresence>
 
       <AnimatePresence>
