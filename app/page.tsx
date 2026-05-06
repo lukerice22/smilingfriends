@@ -1,0 +1,806 @@
+"use client"
+
+import { useState, useEffect, useCallback, useRef } from "react"
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  type PanInfo,
+} from "framer-motion"
+
+// ---------- Zalgo ----------
+function zalgo(text: string): string {
+  const up = ["̍","̎","̄","̅","̿","̑","̆","̐","͒","͗","͑","̇","̈","̊","͂","̓","̈́","͊","͋","͌","̃"]
+  const down = ["̖","̗","̘","̙","̜","̝","̞","̟","̠","̤","̥","̦","̩","̪","̫","̬","̭","̮","̯","̰","̱"]
+  const mid = ["̕","̛","̀","́","͘","̡","̢","̧","̨","̴","̵","̶","͏","͜"]
+  return text.split("").map((c) => {
+    let r = c
+    for (let i = 0; i < Math.floor(Math.random() * 8); i++) r += up[Math.floor(Math.random() * up.length)]
+    for (let i = 0; i < Math.floor(Math.random() * 3); i++) r += mid[Math.floor(Math.random() * mid.length)]
+    for (let i = 0; i < Math.floor(Math.random() * 8); i++) r += down[Math.floor(Math.random() * down.length)]
+    return r
+  }).join("")
+}
+
+// ---------- Types ----------
+type Vec = { x: number; y: number }
+
+interface PhysicsRefs {
+  alanPosRef: React.MutableRefObject<Vec | null>
+  alanActiveRef: React.MutableRefObject<boolean>
+}
+
+// ---------- Charlie: flees from cursor ----------
+function CursorAverseCharlie() {
+  const [pos, setPos] = useState<Vec>({ x: 0, y: 0 })
+  const [phrase, setPhrase] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [panicLevel, setPanicLevel] = useState(0)
+  const cooldownRef = useRef(0)
+
+  useEffect(() => {
+    setMounted(true)
+    setPos({ x: window.innerWidth * 0.22, y: window.innerHeight * 0.42 })
+  }, [])
+
+  const flee = useCallback(() => {
+    const pad = 220
+    const w = window.innerWidth
+    const h = window.innerHeight
+    setPos({
+      x: Math.random() * (w - pad * 2) + pad,
+      y: Math.random() * (h - pad * 2) + pad,
+    })
+    const phrases = ["GET AWAY!!", "NO TOUCH!!", "NOPE NOPE", "SECURITY!!", "I JUST GOT HERE", "HEY MAN COME ON"]
+    setPhrase(phrases[Math.floor(Math.random() * phrases.length)])
+    setPanicLevel((p) => Math.min(p + 1, 12))
+    setTimeout(() => setPhrase(null), 1100)
+  }, [])
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const now = performance.now()
+      if (now - cooldownRef.current < 250) return
+      const dx = e.clientX - pos.x
+      const dy = e.clientY - pos.y
+      if (Math.hypot(dx, dy) < 110) {
+        cooldownRef.current = now
+        flee()
+      }
+    }
+    window.addEventListener("mousemove", onMove)
+    return () => window.removeEventListener("mousemove", onMove)
+  }, [pos, flee])
+
+  if (!mounted) return null
+
+  return (
+    <motion.div
+      className="absolute z-20 select-none"
+      style={{ left: pos.x, top: pos.y, translateX: "-50%", translateY: "-50%" }}
+      animate={{ left: pos.x, top: pos.y, rotate: [0, -3, 3, 0] }}
+      transition={{
+        left: { type: "spring", stiffness: 700, damping: 22 },
+        top: { type: "spring", stiffness: 700, damping: 22 },
+        rotate: { duration: 1.6, repeat: Infinity },
+      }}
+    >
+      <div className="relative" onTouchStart={flee}>
+        <AnimatePresence>
+          {phrase && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border-[3px] border-foreground bg-card px-3 py-1.5 font-display text-lg tracking-wider text-foreground shadow-[4px_4px_0_0_var(--foreground)]"
+            >
+              {phrase}
+              <div className="absolute -bottom-2 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b-[3px] border-r-[3px] border-foreground bg-card" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="relative h-36 w-36 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
+          <img src="/charlie.png" alt="Charlie" className="h-full w-full object-cover" draggable={false} />
+        </div>
+
+        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-secondary px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
+          CHARLIE
+        </div>
+
+        {panicLevel > 0 && (
+          <motion.div
+            className="absolute -right-2 top-2 h-3 w-2 rounded-full bg-[#5ec8ff] border-2 border-foreground"
+            animate={{ y: [0, 14, 14], opacity: [1, 1, 0] }}
+            transition={{ duration: 0.9, repeat: Infinity }}
+          />
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+// ---------- Pim: draggable + attracted to Alan ----------
+function DraggablePim({
+  sadZoneRef,
+  onExplode,
+  physics,
+  onEaten,
+  eaten,
+}: {
+  sadZoneRef: React.RefObject<HTMLDivElement | null>
+  onExplode: () => void
+  physics: PhysicsRefs
+  onEaten: (atScreenPos: Vec) => void
+  eaten: boolean
+}) {
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    let raf = 0
+    const tick = () => {
+      if (
+        physics.alanActiveRef.current &&
+        physics.alanPosRef.current &&
+        !draggingRef.current &&
+        wrapRef.current &&
+        !eaten
+      ) {
+        const r = wrapRef.current.getBoundingClientRect()
+        const px = r.left + r.width / 2
+        const py = r.top + r.height / 2
+        const ax = physics.alanPosRef.current.x
+        const ay = physics.alanPosRef.current.y
+        const dx = ax - px
+        const dy = ay - py
+        const dist = Math.hypot(dx, dy) || 1
+        if (dist < 70) {
+          onEaten({ x: ax, y: ay })
+        } else {
+          const strength = Math.min(45000 / (dist * dist + 80), 9)
+          x.set(x.get() + (dx / dist) * strength)
+          y.set(y.get() + (dy / dist) * strength)
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [physics, x, y, onEaten, eaten])
+
+  const handleStart = () => { draggingRef.current = true; setDragging(true) }
+  const handleEnd = (_: unknown, info: PanInfo) => {
+    draggingRef.current = false
+    setDragging(false)
+    if (!sadZoneRef.current) return
+    const r = sadZoneRef.current.getBoundingClientRect()
+    const { x: px, y: py } = info.point
+    if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) onExplode()
+  }
+
+  if (eaten) return null
+
+  return (
+    <motion.div
+      ref={wrapRef}
+      drag
+      dragMomentum={false}
+      dragElastic={0.2}
+      onDragStart={handleStart}
+      onDragEnd={handleEnd}
+      whileDrag={{ scale: 1.15, zIndex: 50 }}
+      style={{ x, y }}
+      className="absolute bottom-24 left-12 z-30 cursor-grab touch-none active:cursor-grabbing"
+    >
+      <motion.div
+        className="relative select-none"
+        animate={dragging ? { rotate: [0, -8, 8, -8, 8, 0] } : { y: [0, -8, 0] }}
+        transition={{
+          rotate: { duration: 0.4, repeat: Infinity },
+          y: { duration: 1.6, repeat: Infinity, ease: "easeInOut" },
+        }}
+      >
+        <AnimatePresence>
+          {dragging && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border-[3px] border-foreground bg-secondary px-3 py-1.5 font-display text-lg tracking-wider text-foreground shadow-[4px_4px_0_0_var(--foreground)]"
+            >
+              WHEEEEE!!
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="relative h-40 w-40 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
+          <img src="/pim.png" alt="Pim" className="h-full w-full object-cover" draggable={false} />
+        </div>
+
+        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-card px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
+          PIM
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ---------- Sad Guy Zone (TV portal) ----------
+function SadZone({ innerRef }: { innerRef: React.RefObject<HTMLDivElement | null> }) {
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+      <motion.div
+        animate={{ rotate: [-1.5, 1.5, -1.5] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="relative"
+      >
+        <div className="rounded-[28px] border-[5px] border-foreground bg-card p-5 shadow-[10px_10px_0_0_var(--foreground)]">
+          <div
+            ref={innerRef}
+            className="pointer-events-auto relative h-56 w-72 overflow-hidden rounded-xl border-[5px] border-foreground bg-[repeating-linear-gradient(0deg,#1a1a1a_0px,#1a1a1a_2px,#0a0a0a_2px,#0a0a0a_4px)]"
+          >
+            <div className="absolute inset-0 opacity-30 mix-blend-screen">
+              <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,#fff_1px,transparent_1px),radial-gradient(circle_at_70%_60%,#fff_1px,transparent_1px),radial-gradient(circle_at_40%_80%,#fff_1px,transparent_1px)] [background-size:6px_6px,8px_8px,5px_5px]" />
+            </div>
+
+            <div className="relative flex h-full w-full flex-col items-center justify-center text-card">
+              <motion.div
+                animate={{ y: [0, 4, 0] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className="flex flex-col items-center gap-3"
+              >
+                <div className="relative h-20 w-20 rounded-full border-[4px] border-card bg-transparent">
+                  <div className="absolute left-3 top-5 h-3 w-3 rounded-full bg-card" />
+                  <div className="absolute right-3 top-5 h-3 w-3 rounded-full bg-card" />
+                  <div className="absolute left-1/2 top-3 h-1 w-2 -translate-x-3 rotate-12 rounded bg-card" />
+                  <div className="absolute right-1/2 top-3 h-1 w-2 translate-x-3 -rotate-12 rounded bg-card" />
+                  <div className="absolute bottom-3 left-1/2 h-3 w-8 -translate-x-1/2 rounded-b-full border-b-[3px] border-card" />
+                  <motion.div
+                    animate={{ y: [0, 12, 12], opacity: [1, 1, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity }}
+                    className="absolute left-3 top-9 h-2 w-1.5 rounded-full bg-[#5ec8ff]"
+                  />
+                </div>
+                <p className="font-display text-xl tracking-widest text-card">SAD GUY</p>
+              </motion.div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,transparent_0px,transparent_3px,rgba(0,0,0,0.25)_3px,rgba(0,0,0,0.25)_4px)]" />
+          </div>
+
+          <div className="mt-3 flex items-center justify-between px-1">
+            <div className="flex gap-1">
+              <div className="h-3 w-3 rounded-full border-2 border-foreground bg-secondary" />
+              <div className="h-3 w-3 rounded-full border-2 border-foreground bg-accent" />
+            </div>
+            <div className="font-display text-sm tracking-[0.3em] text-foreground">CHANNEL 4</div>
+            <div className="h-3 w-10 rounded-full border-2 border-foreground bg-foreground" />
+          </div>
+        </div>
+
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 rotate-[-4deg] rounded border-[3px] border-foreground bg-secondary px-3 py-1 font-display text-sm tracking-widest text-foreground shadow-[3px_3px_0_0_var(--foreground)]">
+          DRAG PIM HERE
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ---------- Happiness Explosion ----------
+function HappinessExplosion({ onComplete }: { onComplete: () => void }) {
+  const [bg, setBg] = useState("#ff1f8f")
+
+  useEffect(() => {
+    const colors = ["#ff1f8f", "#ffe14d", "#7cff3e", "#5ec8ff"]
+    let i = 0
+    const id = setInterval(() => { i = (i + 1) % colors.length; setBg(colors[i]) }, 110)
+    const t = setTimeout(onComplete, 5000)
+    return () => { clearInterval(id); clearTimeout(t) }
+  }, [onComplete])
+
+  const sparkles = Array.from({ length: 60 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    delay: Math.random() * 2,
+    size: 20 + Math.random() * 40,
+    rot: Math.random() * 360,
+  }))
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
+      style={{ backgroundColor: bg }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      {sparkles.map((s) => (
+        <motion.div
+          key={s.id}
+          className="absolute"
+          style={{ left: `${s.x}%`, width: s.size, height: s.size }}
+          initial={{ y: "110vh", rotate: s.rot }}
+          animate={{ y: "-20vh", rotate: s.rot + 720 }}
+          transition={{ duration: 2.5 + Math.random() * 1.5, delay: s.delay, repeat: Infinity, ease: "linear" }}
+        >
+          <svg viewBox="0 0 24 24" className="h-full w-full">
+            <path d="M12 0 L14 9 L24 12 L14 15 L12 24 L10 15 L0 12 L10 9 Z" fill="#fff8e8" stroke="#0a0a0a" strokeWidth="2" />
+          </svg>
+        </motion.div>
+      ))}
+
+      <motion.div
+        className="relative z-10 px-8 text-center"
+        animate={{ scale: [1, 1.08, 1], rotate: [-2, 2, -2] }}
+        transition={{ duration: 0.4, repeat: Infinity }}
+      >
+        <h1
+          className="font-display text-6xl leading-none tracking-wider md:text-8xl lg:text-[10rem]"
+          style={{ WebkitTextStroke: "4px #0a0a0a", color: "#fff8e8", textShadow: "8px 8px 0 #0a0a0a" }}
+        >
+          I LOVE
+          <br />
+          HELPING
+          <br />
+          KIDS!!
+        </h1>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ---------- Glep ----------
+const GLEP_GOAL = 20000
+
+function Glep({
+  onChaos,
+  physics,
+  clickCount,
+  onClick,
+}: {
+  onChaos: (t: { rotate: number; skewX: number; skewY: number }) => void
+  physics: PhysicsRefs
+  clickCount: number
+  onClick: () => void
+}) {
+  const [zalgoText, setZalgoText] = useState<string | null>(null)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let raf = 0
+    const MAX_OFFSET = 280
+    const tick = () => {
+      if (physics.alanActiveRef.current && physics.alanPosRef.current && wrapRef.current) {
+        const r = wrapRef.current.getBoundingClientRect()
+        const px = r.left + r.width / 2
+        const py = r.top + r.height / 2
+        const ax = physics.alanPosRef.current.x
+        const ay = physics.alanPosRef.current.y
+        const dx = ax - px
+        const dy = ay - py
+        const dist = Math.hypot(dx, dy) || 1
+        const strength = Math.min(22000 / (dist * dist + 100), 5)
+        const nx = x.get() + (dx / dist) * strength
+        const ny = y.get() + (dy / dist) * strength
+        x.set(Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, nx)))
+        y.set(Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, ny)))
+      } else {
+        const cx = x.get()
+        const cy = y.get()
+        if (Math.abs(cx) > 0.5 || Math.abs(cy) > 0.5) {
+          x.set(cx * 0.94)
+          y.set(cy * 0.94)
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [physics, x, y])
+
+  const trigger = () => {
+    onClick()
+    const intensity = Math.min(1 + clickCount * 0.4, 4)
+    onChaos({
+      rotate: (Math.random() * 24 - 12) * intensity,
+      skewX: (Math.random() * 8 - 4) * intensity,
+      skewY: (Math.random() * 8 - 4) * intensity,
+    })
+    const phrases = [
+      "THE VOID CONSUMES", "GLEP SEES ALL", "ERROR 404 SANITY",
+      "iPAD OF DOOM", "SUBSCRIBE NOW", "BEHOLD",
+      "WHY DID YOU CLICK", "STOP THAT",
+    ]
+    setZalgoText(zalgo(phrases[Math.floor(Math.random() * phrases.length)]))
+    setTimeout(() => setZalgoText(null), 2000)
+  }
+
+  const pct = Math.min((clickCount / GLEP_GOAL) * 100, 100)
+
+  return (
+    <>
+      <motion.div
+        ref={wrapRef}
+        className="absolute bottom-12 right-12 z-20 flex flex-col items-center gap-3"
+        style={{ x, y }}
+      >
+        <motion.button
+          type="button"
+          className="cursor-pointer select-none focus:outline-none"
+          whileHover={{ scale: 1.08, rotate: -4 }}
+          whileTap={{ scale: 0.92, rotate: 4 }}
+          onClick={trigger}
+          animate={{ y: [0, -6, 0] }}
+          transition={{ y: { duration: 2, repeat: Infinity, ease: "easeInOut" } }}
+        >
+          <div className="relative">
+            <div className="relative h-32 w-32 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
+              <img src="/glep.png" alt="Glep" className="h-full w-full object-cover" draggable={false} />
+            </div>
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-accent px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
+              GLEP
+            </div>
+            <motion.div
+              animate={{ rotate: [-6, 6, -6] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="absolute -right-4 -top-4 rounded-md border-[3px] border-foreground bg-card px-2 py-1 font-display text-xs tracking-wider text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
+            >
+              CLICK ME
+            </motion.div>
+          </div>
+        </motion.button>
+
+        {/* Progress toward 20k */}
+        <div className="mt-2 w-36 rounded-lg border-[3px] border-foreground bg-card px-3 py-2 shadow-[3px_3px_0_0_var(--foreground)]">
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] text-foreground">
+            <span>{clickCount.toLocaleString()}</span>
+            <span className="opacity-60">/ 20K</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-foreground bg-background">
+            <motion.div
+              className="h-full rounded-full bg-secondary"
+              animate={{ width: `${pct}%` }}
+              transition={{ type: "spring", stiffness: 60, damping: 14 }}
+            />
+          </div>
+          {clickCount > 0 && (
+            <div className="mt-1 text-center font-mono text-[9px] text-foreground opacity-50">
+              {pct < 100 ? `${pct.toFixed(1)}%` : "COMPLETE!!"}
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      <AnimatePresence>
+        {zalgoText && (
+          <motion.div
+            className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.p
+              className="max-w-[90vw] text-center font-display text-5xl tracking-wider md:text-7xl lg:text-9xl"
+              style={{
+                color: "#fff8e8",
+                WebkitTextStroke: "3px #0a0a0a",
+                textShadow: "6px 6px 0 #0a0a0a, 0 0 30px rgba(255,255,255,0.6)",
+              }}
+              animate={{ x: [0, -12, 12, -12, 12, 0], y: [0, 4, -4, 4, -4, 0] }}
+              transition={{ duration: 0.25, repeat: 8 }}
+            >
+              {zalgoText}
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+// ---------- Alan: TPS report guy — appears briefly, stays calm ----------
+function Alan({ pos, active }: { pos: Vec; active: boolean }) {
+  return (
+    <AnimatePresence>
+      {active && (
+        <motion.div
+          className="pointer-events-none fixed z-[60] select-none"
+          style={{ left: pos.x, top: pos.y, translateX: "-50%", translateY: "-50%" }}
+          initial={{ scale: 0, rotate: -15 }}
+          animate={{ scale: 1, rotate: [-1.5, 1.5, -1.5] }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{
+            scale: { type: "spring", stiffness: 300, damping: 20 },
+            rotate: { duration: 2.5, repeat: Infinity },
+          }}
+        >
+          <div className="relative">
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border-[3px] border-foreground bg-card px-3 py-1.5 font-display text-sm tracking-wider text-foreground shadow-[4px_4px_0_0_var(--foreground)]"
+            >
+              TPS REPORT?
+              <div className="absolute -bottom-2 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b-[3px] border-r-[3px] border-foreground bg-card" />
+            </motion.div>
+
+            <div className="relative h-24 w-24 overflow-hidden rounded-full border-[5px] border-foreground shadow-[6px_6px_0_0_var(--foreground)]">
+              <img src="/alan.png" alt="Alan" className="h-full w-full object-cover" draggable={false} />
+            </div>
+
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border-[3px] border-foreground bg-card px-3 py-0.5 font-display text-sm tracking-widest text-foreground">
+              ALAN
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+// ---------- Cheese bubble (Pim eulogy) ----------
+function CheeseBubble({ pos, onDone }: { pos: Vec; onDone: () => void }) {
+  const phrases = [
+    "BUT MY CHEESE...", "WHERE'S THE CHEESE??", "i had cheese for him",
+    "GOODBYE CHEESE FRIEND", "the cheese was for sharing.",
+  ]
+  const phrase = useRef(phrases[Math.floor(Math.random() * phrases.length)]).current
+
+  useEffect(() => {
+    const t = setTimeout(onDone, 2600)
+    return () => clearTimeout(t)
+  }, [onDone])
+
+  return (
+    <motion.div
+      className="pointer-events-none fixed z-[80] select-none"
+      style={{ left: pos.x, top: pos.y, translateX: "-50%", translateY: "-50%" }}
+      initial={{ scale: 0, y: 20, opacity: 0 }}
+      animate={{ scale: 1, y: -120, opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 2.4, ease: "easeOut" }}
+    >
+      <div className="rounded-md border-[3px] border-foreground bg-secondary px-4 py-2 font-display text-2xl tracking-wider text-foreground shadow-[5px_5px_0_0_var(--foreground)]">
+        {phrase}
+      </div>
+    </motion.div>
+  )
+}
+
+// ---------- Decorations ----------
+function VoidDecorations() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div
+        className="absolute inset-0 opacity-[0.12]"
+        style={{
+          backgroundImage: "radial-gradient(circle, #0a0a0a 1.5px, transparent 1.5px)",
+          backgroundSize: "22px 22px",
+        }}
+      />
+      {[
+        { top: "12%", left: "8%", size: 28, rot: 12 },
+        { top: "22%", right: "14%", size: 36, rot: -20 },
+        { top: "55%", left: "6%", size: 22, rot: 30 },
+        { bottom: "18%", right: "30%", size: 30, rot: -10 },
+        { top: "38%", right: "8%", size: 26, rot: 18 },
+        { bottom: "8%", left: "38%", size: 24, rot: -25 },
+      ].map((s, i) => (
+        <motion.svg
+          key={i}
+          viewBox="0 0 24 24"
+          className="absolute"
+          style={{ top: s.top, left: s.left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size }}
+          animate={{ rotate: [s.rot, s.rot + 360] }}
+          transition={{ duration: 8 + i * 2, repeat: Infinity, ease: "linear" }}
+        >
+          <path d="M12 0 L14 9 L24 12 L14 15 L12 24 L10 15 L0 12 L10 9 Z" fill="#ffe14d" stroke="#0a0a0a" strokeWidth="1.8" />
+        </motion.svg>
+      ))}
+      <svg className="absolute left-[20%] top-[18%] h-10 w-24" viewBox="0 0 100 40">
+        <path d="M2 20 Q 15 2, 28 20 T 54 20 T 80 20 T 98 20" stroke="#0a0a0a" strokeWidth="3" fill="none" strokeLinecap="round" />
+      </svg>
+      <svg className="absolute right-[16%] bottom-[28%] h-10 w-24 rotate-12" viewBox="0 0 100 40">
+        <path d="M2 20 Q 15 38, 28 20 T 54 20 T 80 20 T 98 20" stroke="#0a0a0a" strokeWidth="3" fill="none" strokeLinecap="round" />
+      </svg>
+    </div>
+  )
+}
+
+// ---------- Instructions modal ----------
+function InstructionsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <motion.div
+        className="relative z-10 mx-4 w-full max-w-sm rotate-[-1deg] rounded-lg border-[4px] border-foreground bg-card p-6 shadow-[8px_8px_0_0_var(--foreground)]"
+        initial={{ scale: 0.88, y: 16 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.88, y: 16 }}
+        transition={{ type: "spring", stiffness: 320, damping: 22 }}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border-[2px] border-foreground bg-background font-display text-sm text-foreground hover:bg-secondary transition-colors"
+        >
+          ✕
+        </button>
+
+        <p className="font-display text-2xl tracking-wider text-foreground">HOW TO PLAY</p>
+
+        <ol className="mt-3 space-y-3 font-mono text-[12px] leading-relaxed text-foreground">
+          <li className="flex gap-3">
+            <span className="font-display text-base leading-none text-foreground shrink-0">1.</span>
+            <span>Try to touch <b>Charlie</b>. He flees whenever you get close.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="font-display text-base leading-none text-foreground shrink-0">2.</span>
+            <span>Drag <b>Pim</b> into the TV to visit the Sad Guy.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="font-display text-base leading-none text-foreground shrink-0">3.</span>
+            <span>Click <b>Glep</b> 20,000 times. Each click warps reality harder. Reach the goal!</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="font-display text-base leading-none text-foreground shrink-0">4.</span>
+            <span><b>Alan</b> pops in occasionally with a TPS report. Keep Pim away or HR gets him.</span>
+          </li>
+        </ol>
+
+        <div className="mt-4 rounded border-[2px] border-foreground bg-secondary px-3 py-1.5 text-center font-mono text-[10px] tracking-widest text-foreground">
+          CLICK ANYWHERE TO CLOSE
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ---------- Main ----------
+export default function SmilingFriendsSandbox() {
+  const [explode, setExplode] = useState(false)
+  const [transform, setTransform] = useState({ rotate: 0, skewX: 0, skewY: 0 })
+  const [showInstructions, setShowInstructions] = useState(false)
+  const sadZoneRef = useRef<HTMLDivElement>(null)
+
+  const [glepClicks, setGlepClicks] = useState(0)
+
+  const [alanPos, setAlanPos] = useState<Vec>({ x: 0, y: 0 })
+  const [alanActive, setAlanActive] = useState(false)
+  const alanPosRef = useRef<Vec | null>(null)
+  const alanActiveRef = useRef(false)
+
+  const [pimEaten, setPimEaten] = useState(false)
+  const [cheesePos, setCheesePos] = useState<Vec | null>(null)
+
+  const physics: PhysicsRefs = { alanPosRef, alanActiveRef }
+
+  // Reaching 20k triggers the celebration
+  useEffect(() => {
+    if (glepClicks === GLEP_GOAL) setExplode(true)
+  }, [glepClicks])
+
+  // Alan spawns every 60s, visible for 3s
+  useEffect(() => {
+    const spawn = () => {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      const margin = 130
+      const edge = Math.floor(Math.random() * 4)
+      let x = 0, y = 0
+      if (edge === 0) { x = Math.random() * (w - margin * 2) + margin; y = margin }
+      else if (edge === 1) { x = w - margin; y = Math.random() * (h - margin * 2) + margin }
+      else if (edge === 2) { x = Math.random() * (w - margin * 2) + margin; y = h - margin }
+      else { x = margin; y = Math.random() * (h - margin * 2) + margin }
+
+      const next = { x, y }
+      setAlanPos(next)
+      alanPosRef.current = next
+      setAlanActive(true)
+      alanActiveRef.current = true
+      window.setTimeout(() => {
+        setAlanActive(false)
+        alanActiveRef.current = false
+        alanPosRef.current = null
+      }, 3000)
+    }
+
+    const initial = window.setTimeout(spawn, 20000)
+    const id = window.setInterval(spawn, 60000)
+    return () => { window.clearTimeout(initial); window.clearInterval(id) }
+  }, [])
+
+  const handlePimEaten = useCallback((at: Vec) => {
+    setPimEaten(true)
+    setCheesePos(at)
+  }, [])
+
+  useEffect(() => {
+    if (!pimEaten) return
+    const t = setTimeout(() => setPimEaten(false), 6000)
+    return () => clearTimeout(t)
+  }, [pimEaten])
+
+  return (
+    <main className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
+      <motion.div
+        className="relative h-full w-full"
+        animate={{ rotate: transform.rotate, skewX: transform.skewX, skewY: transform.skewY }}
+        transition={{ type: "spring", stiffness: 90, damping: 9 }}
+      >
+        <VoidDecorations />
+
+        {/* Header */}
+        <header className="absolute left-1/2 top-6 z-30 -translate-x-1/2 select-none text-center">
+          <motion.h1
+            className="font-display text-5xl leading-none tracking-wider text-foreground md:text-7xl"
+            style={{ WebkitTextStroke: "1px #0a0a0a", textShadow: "5px 5px 0 #fff8e8, 7px 7px 0 #0a0a0a" }}
+            animate={{ rotate: [-1.5, 1.5, -1.5] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          >
+            SMILING FRIENDS
+          </motion.h1>
+          <div className="mt-2 inline-block rotate-[-2deg] rounded border-[3px] border-foreground bg-card px-3 py-1 font-mono text-xs uppercase tracking-widest text-foreground shadow-[3px_3px_0_0_var(--foreground)]">
+            chaos sandbox / season ∞ / ep. 404
+          </div>
+        </header>
+
+        {/* ? button — top right */}
+        <motion.button
+          onClick={() => setShowInstructions(true)}
+          className="absolute right-6 top-6 z-30 flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-foreground bg-card font-display text-xl text-foreground shadow-[3px_3px_0_0_var(--foreground)]"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+        >
+          ?
+        </motion.button>
+
+        <SadZone innerRef={sadZoneRef} />
+        <CursorAverseCharlie />
+        <DraggablePim
+          sadZoneRef={sadZoneRef}
+          onExplode={() => setExplode(true)}
+          physics={physics}
+          onEaten={handlePimEaten}
+          eaten={pimEaten}
+        />
+        <Glep
+          onChaos={setTransform}
+          physics={physics}
+          clickCount={glepClicks}
+          onClick={() => setGlepClicks((c) => Math.min(c + 1, GLEP_GOAL))}
+        />
+      </motion.div>
+
+      {/* Alan + cheese bubble outside warped stage so they stay readable */}
+      <Alan pos={alanPos} active={alanActive} />
+
+      <AnimatePresence>
+        {cheesePos && (
+          <CheeseBubble pos={cheesePos} onDone={() => setCheesePos(null)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showInstructions && <InstructionsModal onClose={() => setShowInstructions(false)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {explode && <HappinessExplosion onComplete={() => setExplode(false)} />}
+      </AnimatePresence>
+    </main>
+  )
+}
